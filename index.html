@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Segretaria</title>
+<meta name="description" content="Organizzatore giornaliero personale con assistente AI">
+<meta name="theme-color" content="#2f5d50">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#f6f5f2; --card:#ffffff; --ink:#1d2421; --muted:#66706b; --line:#e3e1db;
+  --brand:#2f5d50; --brand-ink:#ffffff; --accent:#e3b04b; --danger:#b3412f; --ok:#2f7d4f;
+  --soft:#edf2ef; --radius:14px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#121614; --card:#1b201e; --ink:#e8ebe9; --muted:#9aa5a0; --line:#2b322f;
+    --brand:#7fb8a4; --brand-ink:#0d1512; --accent:#e3b04b; --danger:#ef8a78; --ok:#7fcf9b;
+    --soft:#202925; color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{min-height:100vh;padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+header{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top)) 16px 8px;border-bottom:1px solid var(--line)}
+header h1{font-size:1.25rem;margin:0;flex:1}
+header small{display:block;font-weight:400;color:var(--muted);font-size:.85rem}
+main{max-width:640px;margin:0 auto;padding:12px 16px}
+section.view{display:none}
+section.view.on{display:block}
+h2{font-size:1rem;margin:18px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:4px 0;margin-bottom:8px}
+.row{display:flex;align-items:center;gap:10px;padding:8px 12px;min-height:52px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .main{flex:1;min-width:0}
+.row .t{overflow-wrap:anywhere}
+.row .meta{color:var(--muted);font-size:.85rem}
+.done .t{text-decoration:line-through;color:var(--muted)}
+.empty{color:var(--muted);padding:12px;text-align:center}
+button,input,select,textarea{font:inherit;color:inherit}
+button{min-height:44px;min-width:44px;border-radius:10px;border:1px solid var(--line);background:var(--card);padding:0 14px;cursor:pointer}
+button.primary{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+button.icon{padding:0;background:transparent;border:0;font-size:1.25rem}
+button.danger{color:var(--danger)}
+.check{width:28px;height:28px;border-radius:50%;border:2px solid var(--brand);background:transparent;min-width:44px;min-height:44px;display:grid;place-items:center;padding:0}
+.check::before{content:"";width:22px;height:22px;border-radius:50%;border:2px solid var(--brand)}
+.check.on::before{background:var(--brand);box-shadow:inset 0 0 0 3px var(--card)}
+.check{border:0}
+input,select,textarea{min-height:44px;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 12px;width:100%;max-width:100%}
+textarea{min-height:88px;resize:vertical}
+form.add{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}
+form.add input[name=title],form.add textarea{flex:1 1 100%}
+form.add>*{flex:1 1 120px}
+form.add button{flex:0 0 auto}
+.pill{display:inline-block;font-size:.75rem;padding:1px 8px;border-radius:99px;background:var(--soft);color:var(--muted);margin-left:4px}
+.pill.alta{background:var(--danger);color:#fff}
+.time{font-variant-numeric:tabular-nums;font-weight:600;min-width:48px}
+.dots{display:flex;gap:4px;margin-top:4px}
+.dots i{width:10px;height:10px;border-radius:50%;background:var(--line)}
+.dots i.on{background:var(--ok)}
+nav{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;border-radius:0;background:transparent;min-height:60px;padding:4px 0;font-size:.72rem;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+nav button span{font-size:1.3rem;line-height:1}
+nav button.on{color:var(--brand);font-weight:600}
+#chat{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.bubble{max-width:88%;padding:10px 12px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.bubble.user{align-self:flex-end;background:var(--brand);color:var(--brand-ink)}
+.bubble.assistant{align-self:flex-start;background:var(--card);border:1px solid var(--line)}
+.bubble.tool{align-self:flex-start;background:var(--soft);color:var(--muted);font-size:.85rem}
+.bubble.error{align-self:flex-start;background:transparent;border:1px solid var(--danger);color:var(--danger)}
+#askForm{display:flex;gap:8px;position:sticky;bottom:calc(68px + env(safe-area-inset-bottom));background:var(--bg);padding:8px 0}
+#askForm textarea{min-height:48px;height:48px}
+dialog{border:1px solid var(--line);border-radius:var(--radius);background:var(--card);color:var(--ink);width:min(560px,calc(100vw - 32px));padding:16px}
+dialog::backdrop{background:rgb(0 0 0 / .45)}
+dialog label{display:block;margin:10px 0 4px;font-size:.9rem;color:var(--muted)}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.hint{color:var(--muted);font-size:.85rem}
+</style>
+</head>
+<body>
+<header>
+  <h1>Segretaria <small id="today"></small></h1>
+  <button class="icon" id="btnSettings" aria-label="Impostazioni">⚙️</button>
+</header>
+
+<main>
+  <section class="view on" id="v-oggi">
+    <form class="add" id="quickForm">
+      <input name="title" placeholder="Aggiungi un'attività per oggi…" autocomplete="off" aria-label="Nuova attività per oggi">
+    </form>
+    <h2>Impegni di oggi</h2><div class="card" id="todayEvents"></div>
+    <h2>Da fare</h2><div class="card" id="todayTasks"></div>
+    <h2>Abitudini</h2><div class="card" id="todayHabits"></div>
+  </section>
+
+  <section class="view" id="v-attivita">
+    <form class="add" id="taskForm">
+      <input name="title" placeholder="Nuova attività" required autocomplete="off" aria-label="Titolo attività">
+      <input name="due" type="date" aria-label="Scadenza">
+      <input name="time" type="time" aria-label="Ora">
+      <select name="priority" aria-label="Priorità"><option value="media">Media</option><option value="alta">Alta</option><option value="bassa">Bassa</option></select>
+      <button class="primary">Aggiungi</button>
+    </form>
+    <div id="taskList"></div>
+  </section>
+
+  <section class="view" id="v-agenda">
+    <form class="add" id="eventForm">
+      <input name="title" placeholder="Nuovo impegno" required autocomplete="off" aria-label="Titolo impegno">
+      <input name="date" type="date" required aria-label="Data">
+      <input name="time" type="time" aria-label="Ora inizio">
+      <input name="location" placeholder="Luogo" aria-label="Luogo">
+      <button class="primary">Aggiungi</button>
+    </form>
+    <div id="eventList"></div>
+  </section>
+
+  <section class="view" id="v-abitudini">
+    <form class="add" id="habitForm">
+      <input name="title" placeholder="Nuova abitudine (es. Camminare 30 min)" required autocomplete="off" aria-label="Nome abitudine">
+      <button class="primary">Aggiungi</button>
+    </form>
+    <div class="card" id="habitList"></div>
+  </section>
+
+  <section class="view" id="v-note">
+    <form class="add" id="noteForm">
+      <textarea name="text" placeholder="Scrivi una nota…" required aria-label="Testo nota"></textarea>
+      <button class="primary">Salva nota</button>
+    </form>
+    <div class="card" id="noteList"></div>
+  </section>
+
+  <section class="view" id="v-ai">
+    <div id="chat"></div>
+    <form id="askForm">
+      <textarea name="q" placeholder="Es. «ricordami di chiamare il commercialista domani alle 10»" required aria-label="Messaggio all'assistente"></textarea>
+      <button class="primary" id="askBtn">Invia</button>
+    </form>
+  </section>
+</main>
+
+<nav id="nav">
+  <button data-view="oggi" class="on"><span>☀️</span>Oggi</button>
+  <button data-view="attivita"><span>✅</span>Attività</button>
+  <button data-view="agenda"><span>📅</span>Agenda</button>
+  <button data-view="abitudini"><span>🔁</span>Abitudini</button>
+  <button data-view="note"><span>📝</span>Note</button>
+  <button data-view="ai"><span>💬</span>Assistente</button>
+</nav>
+
+<dialog id="dlgSettings">
+  <form method="dialog" id="settingsForm">
+    <strong>Impostazioni</strong>
+    <label for="apiKey">Chiave API Anthropic</label>
+    <input id="apiKey" type="password" autocomplete="off" placeholder="sk-ant-…">
+    <p class="hint">Resta solo su questo telefono. Non viene esportata con i dati.</p>
+    <label for="model">Modello</label>
+    <input id="model" autocomplete="off">
+    <label>Promemoria</label>
+    <button type="button" id="btnNotif">Attiva notifiche</button>
+    <p class="hint">Funzionano mentre l'app è aperta o in background recente.</p>
+    <label>Dati</label>
+    <div class="btns" style="margin-top:0">
+      <button type="button" id="btnExport">Esporta JSON</button>
+      <button type="button" id="btnImport">Importa JSON</button>
+      <button type="button" id="btnClearChat">Svuota chat</button>
+    </div>
+    <input type="file" id="importFile" accept="application/json,.json" hidden>
+    <div class="btns">
+      <button value="cancel">Annulla</button>
+      <button class="primary" id="btnSaveSettings" value="save">Salva</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlgEdit">
+  <form method="dialog" id="editForm">
+    <strong id="editTitle">Modifica</strong>
+    <div id="editFields"></div>
+    <div class="btns">
+      <button type="button" class="danger" id="btnDelete">Elimina</button>
+      <span style="flex:1"></span>
+      <button value="cancel">Annulla</button>
+      <button class="primary" value="save">Salva</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+'use strict';
+const KEY = 'segretaria.v1';
+const SKEY = 'segretaria.settings';
+const DEFAULT_MODEL = 'claude-haiku-5-5';
+
+// ---------- dati ----------
+const empty = () => ({ tasks: [], events: [], notes: [], habits: [], chat: [] });
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY));
+    return d && typeof d === 'object' ? { ...empty(), ...d } : empty();
+  } catch { return empty(); }
+}
+let S = load();
+function save() { localStorage.setItem(KEY, JSON.stringify(S)); }
+
+function loadSettings() {
+  try { return { apiKey: '', model: DEFAULT_MODEL, ...JSON.parse(localStorage.getItem(SKEY) || '{}') }; }
+  catch { return { apiKey: '', model: DEFAULT_MODEL }; }
+}
+let settings = loadSettings();
+function saveSettings() { localStorage.setItem(SKEY, JSON.stringify(settings)); }
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const isoDate = (d = new Date()) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const addDays = (iso, n) => { const d = new Date(iso + 'T12:00'); d.setDate(d.getDate() + n); return isoDate(d); };
+const fmtDay = (iso) => new Date(iso + 'T12:00').toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
+const byTime = (a, b) => (a.time || '99').localeCompare(b.time || '99');
+
+// ---------- operazioni (usate da interfaccia e assistente) ----------
+const ops = {
+  addTask({ title, due = '', time = '', priority = 'media', notes = '' }) {
+    if (!title) throw new Error('titolo mancante');
+    const t = { id: uid(), title: String(title), due, time, priority, notes, done: false, created: new Date().toISOString() };
+    S.tasks.push(t); return t;
+  },
+  updateTask(id, patch) {
+    const t = S.tasks.find((x) => x.id === id);
+    if (!t) throw new Error('attività non trovata: ' + id);
+    for (const k of ['title', 'due', 'time', 'priority', 'notes']) if (patch[k] !== undefined) t[k] = patch[k];
+    if (patch.done !== undefined) { t.done = !!patch.done; t.doneAt = t.done ? new Date().toISOString() : null; }
+    return t;
+  },
+  deleteTask(id) {
+    const i = S.tasks.findIndex((x) => x.id === id);
+    if (i < 0) throw new Error('attività non trovata: ' + id);
+    return S.tasks.splice(i, 1)[0];
+  },
+  addEvent({ title, date, time = '', end_time = '', location = '', notes = '' }) {
+    if (!title || !date) throw new Error('titolo e data obbligatori');
+    const e = { id: uid(), title: String(title), date, time, end: end_time, location, notes };
+    S.events.push(e); return e;
+  },
+  addNote({ text }) {
+    if (!text) throw new Error('testo mancante');
+    const n = { id: uid(), text: String(text), created: new Date().toISOString() };
+    S.notes.unshift(n); return n;
+  },
+  addHabit({ name }) {
+    if (!name) throw new Error('nome mancante');
+    const h = { id: uid(), name: String(name), log: {} };
+    S.habits.push(h); return h;
+  },
+  toggleHabit(id, day = isoDate()) {
+    const h = S.habits.find((x) => x.id === id);
+    if (!h) return;
+    if (h.log[day]) delete h.log[day]; else h.log[day] = true;
+  },
+};
+function streak(h) {
+  let d = isoDate(); if (!h.log[d]) d = addDays(d, -1);
+  let n = 0; while (h.log[d]) { n++; d = addDays(d, -1); }
+  return n;
+}
+
+// ---------- rendering ----------
+function taskRow(t) {
+  const today = isoDate();
+  const late = !t.done && t.due && t.due < today;
+  const meta = [t.due ? (t.due === today ? 'oggi' : fmtDay(t.due)) : '', t.time].filter(Boolean).join(' · ');
+  return `<div class="row ${t.done ? 'done' : ''}">
+    <button class="check ${t.done ? 'on' : ''}" data-act="toggleTask" data-id="${t.id}" aria-label="${t.done ? 'Segna da fare' : 'Completa'}: ${esc(t.title)}"></button>
+    <div class="main"><div class="t">${esc(t.title)}${t.priority === 'alta' ? '<span class="pill alta">alta</span>' : ''}</div>
+    ${meta ? `<div class="meta" ${late ? 'style="color:var(--danger)"' : ''}>${late ? 'scaduta · ' : ''}${esc(meta)}</div>` : ''}</div>
+    <button class="icon" data-act="editTask" data-id="${t.id}" aria-label="Modifica">✏️</button></div>`;
+}
+function eventRow(e) {
+  return `<div class="row"><div class="time">${esc(e.time || '—')}</div>
+    <div class="main"><div class="t">${esc(e.title)}</div>${e.location || e.end ? `<div class="meta">${esc([e.end && 'fino alle ' + e.end, e.location].filter(Boolean).join(' · '))}</div>` : ''}</div>
+    <button class="icon" data-act="editEvent" data-id="${e.id}" aria-label="Modifica">✏️</button></div>`;
+}
+function habitRow(h, withDots) {
+  const today = isoDate(); const on = !!h.log[today];
+  let dots = '';
+  if (withDots) { dots = '<div class="dots" aria-hidden="true">'; for (let i = 6; i >= 0; i--) dots += `<i class="${h.log[addDays(today, -i)] ? 'on' : ''}"></i>`; dots += '</div>'; }
+  return `<div class="row"><button class="check ${on ? 'on' : ''}" data-act="toggleHabit" data-id="${h.id}" aria-label="Fatta oggi: ${esc(h.name)}"></button>
+    <div class="main"><div class="t">${esc(h.name)}</div><div class="meta">Serie: ${streak(h)} giorni</div>${dots}</div>
+    ${withDots ? `<button class="icon" data-act="delHabit" data-id="${h.id}" aria-label="Elimina abitudine">🗑️</button>` : ''}</div>`;
+}
+const list = (items, fn, msg) => (items.length ? items.map(fn).join('') : `<div class="empty">${msg}</div>`);
+
+function render() {
+  const today = isoDate();
+  $('#today').textContent = new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+  // Oggi
+  $('#todayEvents').innerHTML = list(S.events.filter((e) => e.date === today).sort(byTime), eventRow, 'Nessun impegno oggi');
+  $('#todayTasks').innerHTML = list(S.tasks.filter((t) => !t.done && (!t.due || t.due <= today)).sort((a, b) => (a.due || '9').localeCompare(b.due || '9') || byTime(a, b)), taskRow, 'Tutto fatto 🎉');
+  $('#todayHabits').innerHTML = list(S.habits, (h) => habitRow(h, false), 'Nessuna abitudine');
+  // Attività
+  const open = S.tasks.filter((t) => !t.done);
+  const groups = [
+    ['Scadute', open.filter((t) => t.due && t.due < today)],
+    ['Oggi', open.filter((t) => t.due === today)],
+    ['Prossime', open.filter((t) => t.due > today).sort((a, b) => a.due.localeCompare(b.due))],
+    ['Senza data', open.filter((t) => !t.due)],
+    ['Completate', S.tasks.filter((t) => t.done).sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || '')).slice(0, 20)],
+  ].filter(([, l]) => l.length);
+  $('#taskList').innerHTML = groups.length ? groups.map(([n, l]) => `<h2>${n}</h2><div class="card">${l.sort(byTime).map(taskRow).join('')}</div>`).join('') : '<div class="empty">Nessuna attività</div>';
+  // Agenda: da oggi in poi
+  const days = {};
+  S.events.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b)).forEach((e) => (days[e.date] ||= []).push(e));
+  $('#eventList').innerHTML = Object.keys(days).length ? Object.entries(days).map(([d, l]) => `<h2>${d === today ? 'Oggi' : fmtDay(d)}</h2><div class="card">${l.map(eventRow).join('')}</div>`).join('') : '<div class="empty">Nessun impegno in programma</div>';
+  // Abitudini e note
+  $('#habitList').innerHTML = list(S.habits, (h) => habitRow(h, true), 'Aggiungi la prima abitudine');
+  $('#noteList').innerHTML = list(S.notes, (n) => `<div class="row"><div class="main"><div class="t" style="white-space:pre-wrap">${esc(n.text)}</div><div class="meta">${new Date(n.created).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}</div></div><button class="icon" data-act="delNote" data-id="${n.id}" aria-label="Elimina nota">🗑️</button></div>`, 'Nessuna nota');
+  renderChat();
+}
+function renderChat() {
+  const box = $('#chat');
+  box.innerHTML = S.chat.length ? S.chat.map((m) => `<div class="bubble ${m.role}">${esc(m.text)}</div>`).join('')
+    : `<div class="bubble assistant">Ciao! Dimmi cosa devi fare e lo organizzo io.${settings.apiKey ? '' : '\n\nPrima inserisci la chiave API in ⚙️ Impostazioni.'}</div>`;
+}
+function commit() { save(); render(); }
+
+// ---------- navigazione ----------
+function show(view) {
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === 'v-' + view));
+  document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
+  if (view === 'ai') setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 0);
+}
+$('#nav').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) show(b.dataset.view); });
+
+// ---------- form ----------
+const formData = (f) => Object.fromEntries(new FormData(f).entries());
+$('#quickForm').addEventListener('submit', (e) => { e.preventDefault(); const v = e.target.title.value.trim(); if (!v) return; ops.addTask({ title: v, due: isoDate() }); e.target.reset(); commit(); });
+$('#taskForm').addEventListener('submit', (e) => { e.preventDefault(); const d = formData(e.target); ops.addTask({ ...d, title: d.title.trim() }); e.target.reset(); commit(); });
+$('#eventForm').addEventListener('submit', (e) => { e.preventDefault(); const d = formData(e.target); ops.addEvent({ ...d, title: d.title.trim() }); e.target.reset(); e.target.date.value = isoDate(); commit(); });
+$('#habitForm').addEventListener('submit', (e) => { e.preventDefault(); ops.addHabit({ name: e.target.title.value.trim() }); e.target.reset(); commit(); });
+$('#noteForm').addEventListener('submit', (e) => { e.preventDefault(); ops.addNote({ text: e.target.text.value.trim() }); e.target.reset(); commit(); });
+$('#eventForm').date.value = isoDate();
+
+// ---------- azioni sulle righe ----------
+document.body.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const id = b.dataset.id;
+  switch (b.dataset.act) {
+    case 'toggleTask': { const t = S.tasks.find((x) => x.id === id); ops.updateTask(id, { done: !t.done }); break; }
+    case 'toggleHabit': ops.toggleHabit(id); break;
+    case 'delHabit': if (!confirm('Eliminare questa abitudine e il suo storico?')) return; S.habits = S.habits.filter((h) => h.id !== id); break;
+    case 'delNote': if (!confirm('Eliminare la nota?')) return; S.notes = S.notes.filter((n) => n.id !== id); break;
+    case 'editTask': return openEdit('task', id);
+    case 'editEvent': return openEdit('event', id);
+    default: return;
+  }
+  commit();
+});
+
+// ---------- finestra di modifica ----------
+let editing = null;
+const FIELDS = {
+  task: [['title', 'Titolo', 'text'], ['due', 'Scadenza', 'date'], ['time', 'Ora', 'time'], ['priority', 'Priorità', ['alta', 'media', 'bassa']], ['notes', 'Note', 'textarea']],
+  event: [['title', 'Titolo', 'text'], ['date', 'Data', 'date'], ['time', 'Inizio', 'time'], ['end', 'Fine', 'time'], ['location', 'Luogo', 'text'], ['notes', 'Note', 'textarea']],
+};
+function openEdit(kind, id) {
+  const item = (kind === 'task' ? S.tasks : S.events).find((x) => x.id === id); if (!item) return;
+  editing = { kind, id };
+  $('#editTitle').textContent = kind === 'task' ? 'Modifica attività' : 'Modifica impegno';
+  $('#editFields').innerHTML = FIELDS[kind].map(([k, label, type]) => {
+    const v = esc(item[k] || '');
+    const input = Array.isArray(type) ? `<select id="f-${k}" name="${k}">${type.map((o) => `<option ${o === item[k] ? 'selected' : ''}>${o}</option>`).join('')}</select>`
+      : type === 'textarea' ? `<textarea id="f-${k}" name="${k}">${v}</textarea>` : `<input id="f-${k}" name="${k}" type="${type}" value="${v}">`;
+    return `<label for="f-${k}">${label}</label>${input}`;
+  }).join('');
+  $('#dlgEdit').showModal();
+}
+$('#dlgEdit').addEventListener('close', () => {
+  if ($('#dlgEdit').returnValue !== 'save' || !editing) return;
+  const d = formData($('#editForm'));
+  if (!d.title?.trim()) return;
+  if (editing.kind === 'task') ops.updateTask(editing.id, d);
+  else Object.assign(S.events.find((x) => x.id === editing.id), d);
+  editing = null; commit();
+});
+$('#btnDelete').addEventListener('click', () => {
+  if (!editing || !confirm('Eliminare definitivamente?')) return;
+  if (editing.kind === 'task') ops.deleteTask(editing.id); else S.events = S.events.filter((x) => x.id !== editing.id);
+  editing = null; $('#dlgEdit').close(); commit();
+});
+
+// ---------- impostazioni ----------
+$('#btnSettings').addEventListener('click', () => { $('#apiKey').value = settings.apiKey; $('#model').value = settings.model; $('#dlgSettings').showModal(); });
+$('#dlgSettings').addEventListener('close', () => {
+  if ($('#dlgSettings').returnValue !== 'save') return;
+  settings.apiKey = $('#apiKey').value.trim();
+  settings.model = $('#model').value.trim() || DEFAULT_MODEL;
+  saveSettings(); renderChat();
+});
+$('#btnExport').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify({ app: 'segretaria', version: 1, exported: new Date().toISOString(), data: S }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `segretaria-${isoDate()}.json`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+$('#btnImport').addEventListener('click', () => $('#importFile').click());
+$('#importFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const j = JSON.parse(await f.text()); const d = j.data || j;
+    if (!Array.isArray(d.tasks) || !Array.isArray(d.events)) throw new Error('file non riconosciuto');
+    if (!confirm('Sostituire tutti i dati attuali con quelli del file?')) return;
+    S = { ...empty(), ...d }; commit(); alert('Dati importati.');
+  } catch (err) { alert('Import non riuscito: ' + err.message); }
+});
+$('#btnClearChat').addEventListener('click', () => { if (confirm('Svuotare la chat?')) { S.chat = []; history = []; commit(); } });
+
+// ---------- assistente ----------
+const TOOLS = [
+  { name: 'add_task', description: "Crea un'attività da fare.", input_schema: { type: 'object', properties: {
+    title: { type: 'string' }, due: { type: 'string', description: 'Scadenza YYYY-MM-DD' }, time: { type: 'string', description: 'Ora HH:MM' },
+    priority: { type: 'string', enum: ['alta', 'media', 'bassa'] }, notes: { type: 'string' } }, required: ['title'] } },
+  { name: 'add_event', description: 'Crea un impegno in agenda.', input_schema: { type: 'object', properties: {
+    title: { type: 'string' }, date: { type: 'string', description: 'YYYY-MM-DD' }, time: { type: 'string', description: 'HH:MM' },
+    end_time: { type: 'string', description: 'HH:MM' }, location: { type: 'string' }, notes: { type: 'string' } }, required: ['title', 'date'] } },
+  { name: 'add_note', description: 'Salva una nota libera.', input_schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  { name: 'add_habit', description: 'Crea una nuova abitudine giornaliera da tracciare.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+  { name: 'complete_task', description: "Segna un'attività come completata.", input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
+  { name: 'update_task', description: "Modifica un'attività esistente.", input_schema: { type: 'object', properties: {
+    id: { type: 'string' }, title: { type: 'string' }, due: { type: 'string' }, time: { type: 'string' },
+    priority: { type: 'string', enum: ['alta', 'media', 'bassa'] }, notes: { type: 'string' }, done: { type: 'boolean' } }, required: ['id'] } },
+  { name: 'delete_task', description: "Elimina un'attività.", input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
+];
+function runTool(name, input) {
+  switch (name) {
+    case 'add_task': return ops.addTask(input);
+    case 'add_event': return ops.addEvent(input);
+    case 'add_note': return ops.addNote(input);
+    case 'add_habit': return ops.addHabit(input);
+    case 'complete_task': return ops.updateTask(input.id, { done: true });
+    case 'update_task': { const { id, ...p } = input; return ops.updateTask(id, p); }
+    case 'delete_task': return ops.deleteTask(input.id);
+    default: throw new Error('strumento sconosciuto: ' + name);
+  }
+}
+const TOOL_LABEL = { add_task: 'Attività aggiunta', add_event: 'Impegno aggiunto', add_note: 'Nota salvata', add_habit: 'Abitudine aggiunta', complete_task: 'Attività completata', update_task: 'Attività modificata', delete_task: 'Attività eliminata' };
+
+function systemPrompt() {
+  const now = new Date(); const today = isoDate(now);
+  const ctx = {
+    attivita_aperte: S.tasks.filter((t) => !t.done).map(({ id, title, due, time, priority }) => ({ id, title, due, time, priority })),
+    impegni_prossimi: S.events.filter((e) => e.date >= today && e.date <= addDays(today, 14)).map(({ title, date, time, location }) => ({ title, date, time, location })),
+    abitudini: S.habits.map((h) => ({ name: h.name, fatta_oggi: !!h.log[today], serie: streak(h) })),
+  };
+  return `Sei Segretaria, l'assistente personale dell'utente. Rispondi in italiano, in modo breve e pratico.
+Oggi è ${now.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} (${today}), ore ${now.toTimeString().slice(0, 5)}.
+Usa gli strumenti per creare o modificare attività, impegni, note e abitudini. Converti le date relative (domani, lunedì…) in YYYY-MM-DD.
+Per modificare o completare un'attività usa il suo id dall'elenco qui sotto. Dopo aver agito, conferma in una frase.
+Dati attuali: ${JSON.stringify(ctx)}`;
+}
+
+let history = []; // conversazione API della sessione (non salvata)
+async function callApi(messages) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': settings.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({ model: settings.model || DEFAULT_MODEL, max_tokens: 1024, system: systemPrompt(), tools: TOOLS, messages }),
+  });
+  if (!res.ok) {
+    let msg = `Errore ${res.status}`;
+    try { const j = await res.json(); if (j.error?.message) msg += ': ' + j.error.message; } catch {}
+    if (res.status === 401) msg = 'Chiave API non valida: controllala nelle impostazioni.';
+    throw new Error(msg);
+  }
+  return res.json();
+}
+function pushChat(role, text) { S.chat.push({ role, text }); S.chat = S.chat.slice(-60); save(); renderChat(); window.scrollTo(0, document.body.scrollHeight); }
+function trimHistory() {
+  // tiene gli ultimi scambi, ripartendo sempre da un messaggio utente testuale
+  if (history.length <= 24) return;
+  let i = history.length - 24;
+  while (i < history.length && !(history[i].role === 'user' && typeof history[i].content === 'string')) i++;
+  history = history.slice(i);
+}
+async function ask(text) {
+  if (!settings.apiKey) { pushChat('error', 'Manca la chiave API: aprila da ⚙️ Impostazioni.'); return; }
+  pushChat('user', text);
+  history.push({ role: 'user', content: text });
+  $('#askBtn').disabled = true; $('#askBtn').textContent = '…';
+  try {
+    for (let step = 0; step < 8; step++) {
+      const res = await callApi(history);
+      history.push({ role: 'assistant', content: res.content });
+      const said = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+      if (said) pushChat('assistant', said);
+      const uses = res.content.filter((b) => b.type === 'tool_use');
+      if (res.stop_reason !== 'tool_use' || !uses.length) break;
+      const results = uses.map((u) => {
+        try {
+          const out = runTool(u.name, u.input || {});
+          pushChat('tool', `✓ ${TOOL_LABEL[u.name] || u.name}: ${out.title || out.name || out.text || ''}`);
+          return { type: 'tool_result', tool_use_id: u.id, content: JSON.stringify({ ok: true, item: out }) };
+        } catch (err) {
+          return { type: 'tool_result', tool_use_id: u.id, content: err.message, is_error: true };
+        }
+      });
+      commit();
+      history.push({ role: 'user', content: results });
+    }
+  } catch (err) {
+    history.pop(); // la domanda non ha avuto risposta: non lasciarla a metà
+    pushChat('error', err.message === 'Failed to fetch' ? 'Connessione non riuscita. Sei online?' : err.message);
+  } finally {
+    trimHistory();
+    $('#askBtn').disabled = false; $('#askBtn').textContent = 'Invia';
+  }
+}
+$('#askForm').addEventListener('submit', (e) => { e.preventDefault(); const q = e.target.q.value.trim(); if (!q) return; e.target.reset(); ask(q); });
+$('#askForm').q.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#askForm').requestSubmit(); } });
+
+// ---------- promemoria (con app aperta) ----------
+const notified = new Set();
+async function notify(title, body, tag) {
+  if (Notification.permission !== 'granted') return;
+  const reg = await navigator.serviceWorker?.getRegistration();
+  if (reg) reg.showNotification(title, { body, tag, icon: 'icon-192.png', badge: 'icon-192.png' });
+  else new Notification(title, { body, tag });
+}
+function checkReminders() {
+  if (!('Notification' in window)) return;
+  const now = new Date(); const today = isoDate(now);
+  const due = (time) => { if (!time) return false; const [h, m] = time.split(':').map(Number); const diff = (h * 60 + m) - (now.getHours() * 60 + now.getMinutes()); return diff >= 0 && diff <= 15; };
+  for (const e of S.events) if (e.date === today && due(e.time) && !notified.has('e' + e.id)) { notified.add('e' + e.id); notify('📅 ' + e.title, `Alle ${e.time}${e.location ? ' · ' + e.location : ''}`, 'e' + e.id); }
+  for (const t of S.tasks) if (!t.done && t.due === today && due(t.time) && !notified.has('t' + t.id)) { notified.add('t' + t.id); notify('✅ ' + t.title, `Alle ${t.time}`, 't' + t.id); }
+}
+$('#btnNotif').addEventListener('click', async () => {
+  if (!('Notification' in window)) return alert('Notifiche non supportate su questo browser.');
+  const p = await Notification.requestPermission();
+  alert(p === 'granted' ? 'Notifiche attive.' : 'Permesso negato.');
+});
+setInterval(checkReminders, 30000);
+
+// ---------- avvio ----------
+window.addEventListener('storage', (e) => { if (e.key === KEY) { S = load(); render(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { render(); checkReminders(); } });
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+render(); checkReminders();
+</script>
+</body>
+</html>
