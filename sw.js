@@ -1,5 +1,5 @@
 // Service worker di Segretaria: guscio dell'app in cache, nessun dato utente.
-const CACHE = 'segretaria-v2';
+const CACHE = 'segretaria-v3';
 const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

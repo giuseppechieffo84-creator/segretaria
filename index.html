@@ -208,15 +208,76 @@ const SKEY = 'segretaria.settings';
 const DEFAULT_MODEL = 'claude-haiku-5-5';
 
 // ---------- dati ----------
+// I dati stanno in IndexedDB (database "segretaria", archivio "kv", chiave "state").
+// Al primo avvio i dati della vecchia versione in localStorage vengono migrati
+// e la copia originale resta in "segretaria.v1.migrato" come riserva.
 const empty = () => ({ tasks: [], events: [], notes: [], habits: [], chat: [] });
-function load() {
-  try {
-    const d = JSON.parse(localStorage.getItem(KEY));
-    return d && typeof d === 'object' ? { ...empty(), ...d } : empty();
-  } catch { return empty(); }
+const normalize = (d) => (d && typeof d === 'object' ? { ...empty(), ...d } : empty());
+let S = empty();
+let dbp = null;
+function openDB() {
+  if (!dbp) dbp = new Promise((resolve, reject) => {
+    const req = indexedDB.open('segretaria', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('kv');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return dbp;
 }
-let S = load();
-function save() { localStorage.setItem(KEY, JSON.stringify(S)); }
+async function idb(mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('kv', mode); const r = fn(tx.objectStore('kv'));
+    tx.oncomplete = () => resolve(r.result); tx.onerror = tx.onabort = () => reject(tx.error);
+  });
+}
+async function load() {
+  try {
+    let d = await idb('readonly', (st) => st.get('state'));
+    if (d === undefined) {
+      const old = localStorage.getItem(KEY);
+      d = old ? normalize(JSON.parse(old)) : empty();
+      await idb('readwrite', (st) => st.put(d, 'state'));
+      if (old) { localStorage.setItem(KEY + '.migrato', old); localStorage.removeItem(KEY); }
+    }
+    const pending = localStorage.getItem(PENDING);
+    if (pending) {
+      d = normalize(JSON.parse(pending));
+      await idb('readwrite', (st) => st.put(d, 'state'));
+      localStorage.removeItem(PENDING);
+    }
+    dbHandle = await openDB();
+    return normalize(d);
+  } catch (err) {
+    // IndexedDB non disponibile (es. navigazione privata): si resta su localStorage
+    console.warn('IndexedDB non disponibile, uso localStorage', err);
+    dbp = Promise.reject(err); dbp.catch(() => {});
+    try { return normalize(JSON.parse(localStorage.getItem(KEY))); } catch { return empty(); }
+  }
+}
+const bc = 'BroadcastChannel' in window ? new BroadcastChannel('segretaria') : null;
+// Una scrittura IndexedDB ancora in corso quando l'app viene chiusa può andare persa:
+// per questo ogni salvataggio lascia prima una copia sincrona in PENDING, che viene
+// tolta quando IndexedDB conferma e recuperata al prossimo avvio se non è arrivata.
+const PENDING = KEY + '.in-scrittura';
+let dbHandle = null; // valorizzato dopo il primo load()
+let seq = 0;
+function save() {
+  const snap = structuredClone(S);
+  const json = JSON.stringify(snap);
+  if (!dbHandle) {
+    try { localStorage.setItem(KEY, json); } catch (err) { alert('Salvataggio non riuscito: ' + err.message); }
+    return;
+  }
+  const my = ++seq;
+  try { localStorage.setItem(PENDING, json); } catch { /* dati troppo grandi per la copia: resta IndexedDB */ }
+  try {
+    const tx = dbHandle.transaction('kv', 'readwrite');
+    tx.objectStore('kv').put(snap, 'state');
+    tx.oncomplete = () => { if (my === seq) localStorage.removeItem(PENDING); bc?.postMessage('changed'); };
+    tx.onerror = tx.onabort = () => console.warn('Scrittura IndexedDB non riuscita, resta la copia in localStorage', tx.error);
+  } catch (err) { console.warn(err); }
+}
 
 function loadSettings() {
   try { return { apiKey: '', model: DEFAULT_MODEL, ...JSON.parse(localStorage.getItem(SKEY) || '{}') }; }
@@ -571,10 +632,15 @@ $('#btnNotif').addEventListener('click', async () => {
 setInterval(checkReminders, 30000);
 
 // ---------- avvio ----------
-window.addEventListener('storage', (e) => { if (e.key === KEY) { S = load(); render(); } });
+if (bc) bc.onmessage = async () => { S = await load(); render(); };
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { render(); checkReminders(); } });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-applyTheme(); render(); checkReminders();
+applyTheme();
+load().then((d) => {
+  S = d; render(); checkReminders();
+  document.body.dataset.ready = '1';
+  navigator.storage?.persist?.(); // chiede al browser di non cancellare i dati in caso di poco spazio
+});
 </script>
 </body>
 </html>
