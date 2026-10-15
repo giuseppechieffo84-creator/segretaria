@@ -1,5 +1,5 @@
 // Service worker di Segretaria: guscio dell'app in cache, nessun dato utente.
-const CACHE = 'segretaria-v4';
+const CACHE = 'segretaria-v5';
 const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -30,6 +30,15 @@ self.addEventListener('fetch', (e) => {
       })
       .catch(() => caches.match(req).then((r) => r || caches.match('./index.html')))
   );
+});
+
+// Promemoria inviati dal server (Cloudflare Worker), arrivano anche ad app chiusa.
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data && e.data.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Segretaria', {
+    body: d.body || '', tag: d.tag, renotify: !!d.tag, icon: 'icon-192.png', badge: 'icon-192.png',
+  }));
 });
 
 self.addEventListener('notificationclick', (e) => {

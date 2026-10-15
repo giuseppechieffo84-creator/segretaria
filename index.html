@@ -202,9 +202,22 @@ mark{background:var(--accent);color:#1d2421;border-radius:3px;padding:0 2px}
     <input id="model" autocomplete="off">
     <label for="theme">Tema</label>
     <select id="theme"><option value="auto">Automatico (come il telefono)</option><option value="light">Chiaro</option><option value="dark">Scuro</option></select>
-    <label>Promemoria</label>
-    <button type="button" id="btnNotif">Attiva notifiche</button>
-    <p class="hint">Funzionano mentre l'app è aperta o in background recente.</p>
+    <label for="lead">Avviso prima degli impegni</label>
+    <select id="lead"><option value="0">All'ora esatta</option><option value="5">5 minuti prima</option><option value="10">10 minuti prima</option><option value="15">15 minuti prima</option><option value="30">30 minuti prima</option><option value="60">1 ora prima</option></select>
+    <label for="workerUrl">Server promemoria (Cloudflare)</label>
+    <input id="workerUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://segretaria-push.<nome>.workers.dev">
+    <div class="btns" style="margin-top:8px">
+      <button type="button" id="btnPair">Collega questo telefono</button>
+      <button type="button" id="btnTestPush">Notifica di prova</button>
+    </div>
+    <p class="hint" id="pushStatus"></p>
+    <label for="icsUrl">Google Calendar: indirizzo segreto iCal</label>
+    <input id="icsUrl" type="url" autocomplete="off" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics">
+    <div class="btns" style="margin-top:8px">
+      <button type="button" id="btnIcs">Invia al server</button>
+      <button type="button" id="btnIcsOff">Scollega calendario</button>
+    </div>
+    <p class="hint">L'indirizzo va solo al tuo server e non resta sul telefono. Gli eventi Google sono in sola lettura.</p>
     <label>Dati</label>
     <div class="btns" style="margin-top:0">
       <button type="button" id="btnExport">Esporta JSON</button>
@@ -294,6 +307,7 @@ const PENDING = KEY + '.in-scrittura';
 let dbHandle = null; // valorizzato dopo il primo load()
 let seq = 0;
 function save() {
+  scheduleSync();
   const snap = structuredClone(S);
   const json = JSON.stringify(snap);
   if (!dbHandle) {
@@ -387,9 +401,9 @@ function taskRow(t) {
     <button class="icon" data-act="editTask" data-id="${t.id}" aria-label="Modifica">${IC.edit}</button></div>`;
 }
 function eventRow(e) {
-  return `<div class="row"><div class="time">${esc(e.time || '—')}</div>
+  return `<div class="row"><div class="time">${esc(e.allDay ? 'tutto il giorno' : e.time || '—')}</div>
     <div class="main"><div class="t">${esc(e.title)}</div>${e.location || e.end ? `<div class="meta">${esc([e.end && 'fino alle ' + e.end, e.location].filter(Boolean).join(' · '))}</div>` : ''}</div>
-    <button class="icon" data-act="editEvent" data-id="${e.id}" aria-label="Modifica">${IC.edit}</button></div>`;
+    ${e.google ? '<span class="pill">Google</span>' : `<button class="icon" data-act="editEvent" data-id="${e.id}" aria-label="Modifica">${IC.edit}</button>`}</div>`;
 }
 function habitRow(h, withDots) {
   const today = isoDate(); const on = !!h.log[today];
@@ -405,7 +419,7 @@ function render() {
   const today = isoDate();
   $('#today').textContent = new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
   // Oggi
-  $('#todayEvents').innerHTML = list(S.events.filter((e) => e.date === today).sort(byTime), eventRow, 'Nessun impegno oggi');
+  $('#todayEvents').innerHTML = list(allEvents().filter((e) => e.date === today).sort(byTime), eventRow, 'Nessun impegno oggi');
   $('#todayTasks').innerHTML = list(S.tasks.filter((t) => !t.done && (!t.due || t.due <= today)).sort((a, b) => (a.due || '9').localeCompare(b.due || '9') || byTime(a, b)), taskRow, 'Tutto fatto 🎉');
   $('#todayHabits').innerHTML = list(S.habits, (h) => habitRow(h, false), 'Nessuna abitudine');
   // Attività
@@ -424,7 +438,7 @@ function render() {
   renderSearch(); renderStats();
   // Agenda: da oggi in poi
   const days = {};
-  S.events.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b)).forEach((e) => (days[e.date] ||= []).push(e));
+  allEvents().filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b)).forEach((e) => (days[e.date] ||= []).push(e));
   $('#eventList').innerHTML = Object.keys(days).length ? Object.entries(days).map(([d, l]) => `<h2>${d === today ? 'Oggi' : fmtDay(d)}</h2><div class="card">${l.map(eventRow).join('')}</div>`).join('') : '<div class="empty">Nessun impegno in programma</div>';
   // Abitudini e note
   $('#habitList').innerHTML = list(S.habits, (h) => habitRow(h, true), 'Aggiungi la prima abitudine');
@@ -563,13 +577,16 @@ function applyTheme() {
   document.querySelector('meta[name=theme-color]').content = dark ? '#121614' : '#f6f5f2';
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
-$('#btnSettings').addEventListener('click', () => { $('#apiKey').value = settings.apiKey; $('#model').value = settings.model; $('#theme').value = settings.theme || 'auto'; $('#dlgSettings').showModal(); });
+$('#btnSettings').addEventListener('click', () => { $('#apiKey').value = settings.apiKey; $('#model').value = settings.model; $('#theme').value = settings.theme || 'auto'; $('#lead').value = String(settings.lead ?? 15); $('#workerUrl').value = settings.workerUrl || ''; setPushStatus(pushStatusText()); $('#dlgSettings').showModal(); });
 $('#dlgSettings').addEventListener('close', () => {
   if ($('#dlgSettings').returnValue !== 'save') return;
   settings.apiKey = $('#apiKey').value.trim();
   settings.model = $('#model').value.trim() || DEFAULT_MODEL;
   settings.theme = $('#theme').value;
-  saveSettings(); applyTheme(); renderChat();
+  settings.lead = +$('#lead').value;
+  const url = $('#workerUrl').value.trim();
+  if (url !== (settings.workerUrl || '')) { settings.workerUrl = url; settings.workerToken = ''; }
+  saveSettings(); applyTheme(); renderChat(); scheduleSync();
 });
 $('#btnExport').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify({ app: 'segretaria', version: 1, exported: new Date().toISOString(), data: S }, null, 2)], { type: 'application/json' });
@@ -622,7 +639,7 @@ function systemPrompt() {
   const now = new Date(); const today = isoDate(now);
   const ctx = {
     attivita_aperte: S.tasks.filter((t) => !t.done).map(({ id, title, due, time, priority }) => ({ id, title, due, time, priority })),
-    impegni_prossimi: S.events.filter((e) => e.date >= today && e.date <= addDays(today, 14)).map(({ title, date, time, location }) => ({ title, date, time, location })),
+    impegni_prossimi: allEvents().filter((e) => e.date >= today && e.date <= addDays(today, 14)).map(({ title, date, time, location }) => ({ title, date, time, location })),
     abitudini: S.habits.map((h) => ({ name: h.name, fatta_oggi: !!h.log[today], serie: streak(h) })),
   };
   return `Sei Segretaria, l'assistente personale dell'utente. Rispondi in italiano, in modo breve e pratico.
@@ -696,7 +713,100 @@ async function ask(text) {
 $('#askForm').addEventListener('submit', (e) => { e.preventDefault(); const q = e.target.q.value.trim(); if (!q) return; e.target.reset(); ask(q); });
 $('#askForm').q.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#askForm').requestSubmit(); } });
 
-// ---------- promemoria (con app aperta) ----------
+// ---------- server promemoria e calendario (Cloudflare Worker) ----------
+const serverUrl = () => (settings.workerUrl || '').replace(/\/+$/, '');
+async function api(path, opts = {}) {
+  const res = await fetch(serverUrl() + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...(settings.workerToken ? { Authorization: 'Bearer ' + settings.workerToken } : {}), ...(opts.headers || {}) },
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(j.error || `errore ${res.status}`), { status: res.status });
+  return j;
+}
+const setPushStatus = (t) => { $('#pushStatus').textContent = t; };
+function pushStatusText() {
+  if (!settings.workerUrl) return 'Nessun server: i promemoria funzionano solo con l\'app aperta.';
+  if (!settings.workerToken) return 'Server impostato ma telefono non collegato.';
+  return 'Collegato: i promemoria arrivano anche a telefono chiuso.';
+}
+async function pairDevice() {
+  settings.workerUrl = $('#workerUrl').value.trim(); saveSettings();
+  if (!/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)[:/])/.test(settings.workerUrl)) return setPushStatus('Inserisci l\'indirizzo https del server.');
+  if (!('PushManager' in window)) return setPushStatus('Questo browser non supporta le notifiche push. Installa l\'app da Chrome.');
+  try {
+    setPushStatus('Collegamento…');
+    if ((await Notification.requestPermission()) !== 'granted') return setPushStatus('Permesso notifiche negato.');
+    if (!settings.workerToken) {
+      try { settings.workerToken = (await api('/pair', { method: 'POST' })).token; saveSettings(); }
+      catch (err) { if (err.status === 409) return setPushStatus('Il server è già collegato a un altro dispositivo. Va azzerato dal PC.'); throw err; }
+    }
+    const { publicKey } = await api('/vapid');
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (sub && b64u(sub.options?.applicationServerKey) !== publicKey) { await sub.unsubscribe(); sub = null; }
+    sub ||= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: publicKey });
+    await api('/subscribe', { method: 'POST', body: JSON.stringify({ subscription: sub.toJSON() }) });
+    settings.reminderHash = ''; saveSettings();
+    await syncReminders();
+    setPushStatus(pushStatusText());
+  } catch (err) { setPushStatus('Collegamento non riuscito: ' + err.message); }
+}
+function b64u(buf) {
+  if (!buf) return '';
+  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function buildReminders() {
+  const now = Date.now(); const today = isoDate(); const until = addDays(today, 14);
+  const lead = +(settings.lead ?? 15);
+  const at = (date, time) => new Date(`${date}T${time}`).getTime();
+  const out = [];
+  for (const e of S.events) if (e.time && e.date >= today && e.date <= until) out.push({ id: 'e-' + e.id, at: at(e.date, e.time) - lead * 60000, title: '📅 ' + e.title, body: `Alle ${e.time}${e.location ? ' · ' + e.location : ''}` });
+  for (const t of S.tasks) if (!t.done && t.due && t.time && t.due >= today && t.due <= until) out.push({ id: 't-' + t.id, at: at(t.due, t.time), title: '✅ ' + t.title, body: `Alle ${t.time}` });
+  return out.filter((r) => r.at > now - 10 * 60000).sort((a, b) => a.at - b.at);
+}
+let syncTimer = null;
+function scheduleSync() { if (settings.workerToken) { clearTimeout(syncTimer); syncTimer = setTimeout(syncReminders, 2000); } }
+async function syncReminders() {
+  if (!settings.workerToken || !serverUrl()) return;
+  const reminders = buildReminders();
+  const hash = JSON.stringify(reminders);
+  if (hash === settings.reminderHash) return; // niente di nuovo: si risparmiano scritture sul server
+  try { await api('/sync', { method: 'POST', body: JSON.stringify({ reminders }) }); settings.reminderHash = hash; saveSettings(); }
+  catch (err) { console.warn('Sincronizzazione promemoria non riuscita', err.message); if (err.status === 401) { settings.workerToken = ''; saveSettings(); } }
+}
+
+// Calendario Google: cache locale di 15 minuti
+const GKEY = 'segretaria.gcal';
+let gcal = (() => { try { return JSON.parse(localStorage.getItem(GKEY)) || { at: 0, events: [] }; } catch { return { at: 0, events: [] }; } })();
+const allEvents = () => S.events.concat(gcal.events.map((e) => ({ ...e, google: true })));
+async function refreshCalendar(force) {
+  if (!settings.workerToken || !serverUrl() || (!force && Date.now() - gcal.at < 15 * 60000)) return;
+  try {
+    const j = await api('/calendar?tz=' + encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone));
+    gcal = { at: Date.now(), events: j.events || [] };
+    localStorage.setItem(GKEY, JSON.stringify(gcal));
+    render();
+  } catch (err) { console.warn('Calendario non aggiornato', err.message); }
+}
+$('#btnPair').addEventListener('click', pairDevice);
+$('#btnTestPush').addEventListener('click', async () => {
+  try { const r = await api('/test', { method: 'POST' }); setPushStatus(r.ok ? 'Notifica di prova inviata.' : `Il servizio push ha risposto ${r.status}.`); }
+  catch (err) { setPushStatus('Prova non riuscita: ' + err.message); }
+});
+$('#btnIcs').addEventListener('click', async () => {
+  const url = $('#icsUrl').value.trim();
+  if (!url) return;
+  try { await api('/calendar-url', { method: 'POST', body: JSON.stringify({ url }) }); $('#icsUrl').value = ''; setPushStatus('Calendario collegato.'); refreshCalendar(true); }
+  catch (err) { setPushStatus('Calendario non collegato: ' + err.message); }
+});
+$('#btnIcsOff').addEventListener('click', async () => {
+  if (!confirm('Scollegare Google Calendar?')) return;
+  try { await api('/calendar-url', { method: 'DELETE' }); gcal = { at: 0, events: [] }; localStorage.removeItem(GKEY); render(); setPushStatus('Calendario scollegato.'); }
+  catch (err) { setPushStatus('Non riuscito: ' + err.message); }
+});
+
+// ---------- promemoria con app aperta (se il server non è collegato) ----------
 const notified = new Set();
 async function notify(title, body, tag) {
   if (Notification.permission !== 'granted') return;
@@ -705,26 +815,22 @@ async function notify(title, body, tag) {
   else new Notification(title, { body, tag });
 }
 function checkReminders() {
-  if (!('Notification' in window)) return;
+  if (!('Notification' in window) || settings.workerToken) return; // con il server ci pensa il push
+  const lead = +(settings.lead ?? 15);
   const now = new Date(); const today = isoDate(now);
-  const due = (time) => { if (!time) return false; const [h, m] = time.split(':').map(Number); const diff = (h * 60 + m) - (now.getHours() * 60 + now.getMinutes()); return diff >= 0 && diff <= 15; };
+  const due = (time) => { if (!time) return false; const [h, m] = time.split(':').map(Number); const diff = (h * 60 + m) - (now.getHours() * 60 + now.getMinutes()); return diff >= 0 && diff <= Math.max(lead, 1); };
   for (const e of S.events) if (e.date === today && due(e.time) && !notified.has('e' + e.id)) { notified.add('e' + e.id); notify('📅 ' + e.title, `Alle ${e.time}${e.location ? ' · ' + e.location : ''}`, 'e' + e.id); }
   for (const t of S.tasks) if (!t.done && t.due === today && due(t.time) && !notified.has('t' + t.id)) { notified.add('t' + t.id); notify('✅ ' + t.title, `Alle ${t.time}`, 't' + t.id); }
 }
-$('#btnNotif').addEventListener('click', async () => {
-  if (!('Notification' in window)) return alert('Notifiche non supportate su questo browser.');
-  const p = await Notification.requestPermission();
-  alert(p === 'granted' ? 'Notifiche attive.' : 'Permesso negato.');
-});
 setInterval(checkReminders, 30000);
 
 // ---------- avvio ----------
 if (bc) bc.onmessage = async () => { S = await load(); render(); };
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { render(); checkReminders(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { render(); checkReminders(); refreshCalendar(); syncReminders(); } });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 applyTheme();
 load().then((d) => {
-  S = d; render(); checkReminders();
+  S = d; render(); checkReminders(); refreshCalendar(); syncReminders();
   document.body.dataset.ready = '1';
   navigator.storage?.persist?.(); // chiede al browser di non cancellare i dati in caso di poco spazio
 });

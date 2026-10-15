@@ -1,0 +1,18 @@
+name = "segretaria-push"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+# ogni minuto controlla i promemoria in scadenza
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+ALLOWED_ORIGINS = "https://giuseppechieffo84-creator.github.io"
+VAPID_SUBJECT = "https://giuseppechieffo84-creator.github.io/segretaria/"
+VAPID_PUBLIC = "DA_IMPOSTARE"
+
+# l'id viene scritto al primo deploy (wrangler kv namespace create SEGRETARIA)
+[[kv_namespaces]]
+binding = "SEGRETARIA"
+id = "DA_IMPOSTARE"
