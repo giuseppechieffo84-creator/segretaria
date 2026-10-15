@@ -87,11 +87,24 @@ dialog::backdrop{background:rgb(0 0 0 / .45)}
 dialog label{display:block;margin:10px 0 4px;font-size:.9rem;color:var(--muted)}
 .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .hint{color:var(--muted);font-size:.85rem}
+.filters{display:flex;gap:8px;margin-bottom:4px}
+.filters select{flex:1;min-width:0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px;text-align:center}
+.stat b{display:block;font-size:1.5rem}
+.stat span{color:var(--muted);font-size:.8rem}
+.bars{display:flex;align-items:flex-end;gap:6px;height:140px;padding:12px}
+.bars div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;font-size:.75rem;color:var(--muted)}
+.bars i{display:block;width:100%;background:var(--brand);border-radius:6px 6px 0 0;min-height:2px}
+.bars b{color:var(--ink);font-weight:600}
+mark{background:var(--accent);color:#1d2421;border-radius:3px;padding:0 2px}
 </style>
 </head>
 <body>
 <header>
   <h1>Segretaria <small id="today"></small></h1>
+  <button class="icon" id="btnSearch" aria-label="Cerca"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></button>
+  <button class="icon" id="btnStats" aria-label="Statistiche"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></button>
   <button class="icon" id="btnSettings" aria-label="Impostazioni"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </header>
 
@@ -113,6 +126,10 @@ dialog label{display:block;margin:10px 0 4px;font-size:.9rem;color:var(--muted)}
       <select name="priority" aria-label="Priorità"><option value="media">Media</option><option value="alta">Alta</option><option value="bassa">Bassa</option></select>
       <button class="primary">Aggiungi</button>
     </form>
+    <div class="filters">
+      <select id="fState" aria-label="Stato"><option value="open">Da fare</option><option value="done">Completate</option><option value="all">Tutte</option></select>
+      <select id="fPrio" aria-label="Priorità"><option value="">Ogni priorità</option><option value="alta">Alta</option><option value="media">Media</option><option value="bassa">Bassa</option></select>
+    </div>
     <div id="taskList"></div>
   </section>
 
@@ -141,6 +158,20 @@ dialog label{display:block;margin:10px 0 4px;font-size:.9rem;color:var(--muted)}
       <button class="primary">Salva nota</button>
     </form>
     <div class="card" id="noteList"></div>
+  </section>
+
+  <section class="view" id="v-cerca">
+    <input id="q" type="search" placeholder="Cerca in attività, impegni, note, abitudini…" autocomplete="off" aria-label="Cerca">
+    <div id="results"></div>
+  </section>
+
+  <section class="view" id="v-stats">
+    <h2 id="weekLabel">Questa settimana</h2>
+    <div class="stats" id="statTiles"></div>
+    <h2>Attività completate per giorno</h2>
+    <div class="card bars" id="statBars"></div>
+    <h2>Abitudini</h2>
+    <div class="card" id="statHabits"></div>
   </section>
 
   <section class="view" id="v-ai">
@@ -378,15 +409,19 @@ function render() {
   $('#todayTasks').innerHTML = list(S.tasks.filter((t) => !t.done && (!t.due || t.due <= today)).sort((a, b) => (a.due || '9').localeCompare(b.due || '9') || byTime(a, b)), taskRow, 'Tutto fatto 🎉');
   $('#todayHabits').innerHTML = list(S.habits, (h) => habitRow(h, false), 'Nessuna abitudine');
   // Attività
-  const open = S.tasks.filter((t) => !t.done);
+  const fState = $('#fState').value, fPrio = $('#fPrio').value;
+  const pool = S.tasks.filter((t) => !fPrio || t.priority === fPrio);
+  const open = fState === 'done' ? [] : pool.filter((t) => !t.done);
+  const byDue = (a, b) => (a.due || '').localeCompare(b.due || '') || byTime(a, b);
   const groups = [
-    ['Scadute', open.filter((t) => t.due && t.due < today)],
-    ['Oggi', open.filter((t) => t.due === today)],
-    ['Prossime', open.filter((t) => t.due > today).sort((a, b) => a.due.localeCompare(b.due))],
+    ['Scadute', open.filter((t) => t.due && t.due < today).sort(byDue)],
+    ['Oggi', open.filter((t) => t.due === today).sort(byTime)],
+    ['Prossime', open.filter((t) => t.due > today).sort(byDue)],
     ['Senza data', open.filter((t) => !t.due)],
-    ['Completate', S.tasks.filter((t) => t.done).sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || '')).slice(0, 20)],
+    ['Completate', fState === 'open' ? [] : pool.filter((t) => t.done).sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || '')).slice(0, fState === 'done' ? 200 : 20)],
   ].filter(([, l]) => l.length);
-  $('#taskList').innerHTML = groups.length ? groups.map(([n, l]) => `<h2>${n}</h2><div class="card">${l.sort(byTime).map(taskRow).join('')}</div>`).join('') : '<div class="empty">Nessuna attività</div>';
+  $('#taskList').innerHTML = groups.length ? groups.map(([n, l]) => `<h2>${n}</h2><div class="card">${l.map(taskRow).join('')}</div>`).join('') : '<div class="empty">Nessuna attività</div>';
+  renderSearch(); renderStats();
   // Agenda: da oggi in poi
   const days = {};
   S.events.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b)).forEach((e) => (days[e.date] ||= []).push(e));
@@ -404,6 +439,58 @@ function renderChat() {
 function commit() { save(); render(); }
 
 // ---------- navigazione ----------
+$('#fState').addEventListener('change', render);
+$('#fPrio').addEventListener('change', render);
+$('#btnSearch').addEventListener('click', () => { show('cerca'); $('#q').focus(); });
+$('#btnStats').addEventListener('click', () => { renderStats(); show('stats'); });
+$('#q').addEventListener('input', renderSearch);
+
+// ---------- ricerca ----------
+function renderSearch() {
+  const q = $('#q').value.trim().toLowerCase();
+  if (!q) { $('#results').innerHTML = '<div class="empty">Scrivi almeno una parola</div>'; return; }
+  const hit = (...f) => f.some((x) => String(x || '').toLowerCase().includes(q));
+  const rx = new RegExp(esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  const hl = (t) => esc(t).replace(rx, (m) => `<mark>${m}</mark>`);
+  const sec = (title, rows) => (rows.length ? `<h2>${title} (${rows.length})</h2><div class="card">${rows.join('')}</div>` : '');
+  const tasks = S.tasks.filter((t) => hit(t.title, t.notes)).map((t) => taskRow(t).replace(`<div class="t">${esc(t.title)}`, `<div class="t">${hl(t.title)}`));
+  const events = S.events.filter((e) => hit(e.title, e.location, e.notes)).sort((a, b) => b.date.localeCompare(a.date))
+    .map((e) => `<div class="row"><div class="time">${esc(e.time || '—')}</div><div class="main"><div class="t">${hl(e.title)}</div><div class="meta">${fmtDay(e.date)}${e.location ? ' · ' + esc(e.location) : ''}</div></div><button class="icon" data-act="editEvent" data-id="${e.id}" aria-label="Modifica">${IC.edit}</button></div>`);
+  const notes = S.notes.filter((n) => hit(n.text)).map((n) => `<div class="row"><div class="main"><div class="t" style="white-space:pre-wrap">${hl(n.text)}</div></div></div>`);
+  const habits = S.habits.filter((h) => hit(h.name)).map((h) => habitRow(h, true));
+  const html = sec('Attività', tasks) + sec('Impegni', events) + sec('Note', notes) + sec('Abitudini', habits);
+  $('#results').innerHTML = html || '<div class="empty">Nessun risultato</div>';
+}
+
+// ---------- statistiche settimanali ----------
+function weekStart(iso) { const d = new Date(iso + 'T12:00'); return addDays(iso, -((d.getDay() + 6) % 7)); }
+function bestStreak(h) {
+  const days = Object.keys(h.log).sort(); let best = 0, cur = 0, prev = null;
+  for (const d of days) { cur = prev && addDays(prev, 1) === d ? cur + 1 : 1; best = Math.max(best, cur); prev = d; }
+  return best;
+}
+function renderStats() {
+  const today = isoDate(); const mon = weekStart(today); const prevMon = addDays(mon, -7);
+  const doneOn = (d) => S.tasks.filter((t) => t.done && t.doneAt && isoDate(new Date(t.doneAt)) === d).length;
+  const week = [...Array(7)].map((_, i) => addDays(mon, i));
+  const counts = week.map(doneOn);
+  const total = counts.reduce((a, b) => a + b, 0);
+  const prevTotal = [...Array(7)].map((_, i) => doneOn(addDays(prevMon, i))).reduce((a, b) => a + b, 0);
+  const overdue = S.tasks.filter((t) => !t.done && t.due && t.due < today).length;
+  $('#weekLabel').textContent = `Settimana dal ${fmtDay(mon)} al ${fmtDay(addDays(mon, 6))}`;
+  const diff = total - prevTotal;
+  $('#statTiles').innerHTML = `<div class="stat"><b>${total}</b><span>completate</span></div>
+    <div class="stat"><b>${diff > 0 ? '+' : ''}${diff}</b><span>rispetto alla settimana prima</span></div>
+    <div class="stat"><b style="${overdue ? 'color:var(--danger)' : ''}">${overdue}</b><span>scadute</span></div>`;
+  const max = Math.max(1, ...counts);
+  $('#statBars').innerHTML = week.map((d, i) => `<div aria-label="${fmtDay(d)}: ${counts[i]}"><b>${counts[i] || ''}</b><i style="height:${(counts[i] / max) * 75}%"></i>${new Date(d + 'T12:00').toLocaleDateString('it-IT', { weekday: 'narrow' })}</div>`).join('');
+  $('#statHabits').innerHTML = list(S.habits, (h) => {
+    const n = week.filter((d) => h.log[d]).length;
+    const dots = week.map((d) => `<i class="${h.log[d] ? 'on' : ''}"></i>`).join('');
+    return `<div class="row"><div class="main"><div class="t">${esc(h.name)}</div><div class="meta">${n}/7 questa settimana · serie ${streak(h)} · record ${bestStreak(h)}</div><div class="dots" aria-hidden="true">${dots}</div></div></div>`;
+  }, 'Nessuna abitudine');
+}
+
 function show(view) {
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === 'v-' + view));
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
